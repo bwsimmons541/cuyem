@@ -12,13 +12,6 @@
 clean_carcassData_NEOR <- function(data){
   {if(is.null(data))stop("carcass data must be supplied")}
 
-# NOTE: Fields not captured from carcass query: "Subbasin" "MEPSlength" "CWTAge" "BestAge" "PITage" "LengthAge" "AgeKey"
-# "PIT2" "BestScaleAge" "Adult_or_Jack" "MarkRecapSizeCategory" "TagFile" "ExternalMarks" "Population"
-
-  # filter for GRSME only?
-  #WHERE(b.Subbasin IN ('Imnaha', 'Wallowa-Lostine', 'Wilderness-Wenaha', 'Wilderness-Minam'))
-
-
 data_clean <- data %>%
   mutate(
     ESU_DPS = 'Snake River Spring/Summer-run Chinook Salmon ESU',
@@ -26,12 +19,14 @@ data_clean <- data %>%
     POP_NAME = case_when(
       River %in% c('Big Sheep Creek', 'Lick Creek', 'Little Sheep Creek') ~ 'Big Sheep Creek',
       River == 'Imnaha River' ~ 'Imnaha River mainstem',
-      River %in% c('Bear Creek', 'Hurricane Creek', 'Lostine River', 'Parsnip Creek', 'Prairie Creek', 'Spring Creek', 'Wallowa River') ~ 'Lostine River',
+      River %in% c('Bear Creek', 'Hurricane Creek', 'Lostine River', 'Parsnip Creek',
+                   'Prairie Creek', 'Spring Creek', 'Wallowa River') ~ 'Lostine River',
       River == 'Minam River' ~ 'Minam River',
       River == 'Wenaha River' ~ 'Wenaha River'
     ),
     TRT_POPID = case_when(
-      River %in% c('Bear Creek', 'Hurricane Creek', 'Lostine River', 'Parsnip Creek', 'Prairie Creek', 'Spring Creek', 'Wallowa River') ~ 'GRLOS',
+      River %in% c('Bear Creek', 'Hurricane Creek', 'Lostine River', 'Parsnip Creek',
+                   'Prairie Creek', 'Spring Creek', 'Wallowa River') ~ 'GRLOS',
       River == 'Minam River' ~ 'GRMIN',
       River == 'Wenaha River' ~ 'GRWEN',
       River %in% c('Big Sheep Creek', 'Lick Creek', 'Little Sheep Creek') ~ 'IRBSH',
@@ -44,7 +39,8 @@ data_clean <- data %>%
       River == 'Imnaha River' ~ 'Imnaha River',
       River == 'Lostine River' ~ 'Lostine River',
       River == 'Minam River' ~ 'Minam River',
-      River %in% c('Bear Creek', 'Hurricane Creek', 'Parsnip Creek', 'Prairie Creek', 'Spring Creek', 'Wallowa River') ~ 'Wallowa River',
+      River %in% c('Bear Creek', 'Hurricane Creek', 'Parsnip Creek', 'Prairie Creek',
+                   'Spring Creek', 'Wallowa River') ~ 'Wallowa River',
       River == 'Wenaha River' ~ 'Wenaha River'
     ),
     StreamName = River,
@@ -53,7 +49,8 @@ data_clean <- data %>%
       River %in% c('Wallowa River','Wenaha River') ~ 'Grande Ronde River',
       River == 'Big Sheep Creek' ~ 'Imnaha River',
       River == 'Imnaha River' ~ 'Snake River',
-      River %in% c('Bear Creek', 'Lostine River', 'Hurricane Creek', 'Minam River', 'Prairie Creek', 'Parsnip Creek', 'Spring Creek') ~ 'Wallowa River'
+      River %in% c('Bear Creek', 'Lostine River', 'Hurricane Creek', 'Minam River',
+                   'Prairie Creek', 'Parsnip Creek', 'Spring Creek') ~ 'Wallowa River'
     ),
     LocationLabel = Section,
     TransectName = SiteID,
@@ -87,21 +84,36 @@ data_clean <- data %>%
     ),
     ForkLength = ForkLength,
     PercentSpawned = if_else(Sex == 'Male', NA_integer_, as.integer(round(PercentSpawned, 0))),
-    # SpawnedOut = case_when(   # First Go - remove if other logic is best
-    #   PreSpawn == 'Spawned' ~ 'Yes',
-    #   PreSpawn == 'PreSpawn' ~ 'No',
-    #   PreSpawn %in% c('', 'NotValid', 'Unknown') ~ 'Unknown',
-    #   TRUE ~ NA_character_
-    # ),
     SpawnedOut = case_when(   # anti-PrespawnMort?
       PercentSpawned < 50  ~ 'No', # Indicates a Prespawn Mortality
       PercentSpawned >= 50 ~ 'Yes', # Successful Spawner
       TRUE ~ NA_character_
     ),
-    OpercleLeft = if_else(grepl('LOP', OperclePunchType, ignore.case = T),
-                          str_extract(OperclePunchType, '\\d?\\s*LOP'), NA_character_),
-    OpercleRight = if_else(grepl('ROP', OperclePunchType, ignore.case = T),
-                           str_extract(OperclePunchType, '\\d?\\s*ROP'), NA_character_),
+    OpercleLeft = case_when(
+      is.na(LeftOperclePunchType) | LeftOperclePunchType == 'NA' ~ NA_character_,
+      grepl('^\\d{1}$', LeftOperclePunchType) ~ paste(LeftOperclePunchType, 'LOP'),
+      LeftOperclePunchType %in% c('Unk', 'Unknown') | grepl('LOPunk', LeftOperclePunchType) ~ 'Unknown',
+      LeftOperclePunchType %in% c('None', 'none') ~ 'No',
+      grepl('0LOP', LeftOperclePunchType) ~ 'No',
+      # !grepl('LOP', LeftOperclePunchType) ~ 'No',
+      grepl('LOP', LeftOperclePunchType) ~ str_extract(LeftOperclePunchType, "\\d?\\s*LOP"),
+      TRUE ~ NA_character_
+    ),
+    OpercleRight = case_when(
+      # deal with values in RightOperclePunchType first
+      grepl('0ROP', RightOperclePunchType) ~ 'No',
+      RightOperclePunchType == 'ROPunk' ~ 'Unknown',
+      !is.na(RightOperclePunchType) ~ RightOperclePunchType,
+      # then LeftOperclePunchType with untidy garbage data
+      is.na(LeftOperclePunchType) | LeftOperclePunchType == 'NA' ~ NA_character_,
+      grepl('ROPunk', LeftOperclePunchType) ~ 'Unknown',
+      grepl('0ROP', LeftOperclePunchType) | grepl('none', LeftOperclePunchType) ~ 'No',
+      grepl('ROP', LeftOperclePunchType) ~ str_extract(LeftOperclePunchType, "\\d?\\s*ROP"),
+      grepl('RLOP', LeftOperclePunchType) ~ 'ROP',
+      LeftOperclePunchType %in% c('Unk', "Unknown") ~ 'Unknown', # check this
+      LeftOperclePunchType %in% c('none', 'None') ~ 'No',  # check this
+      TRUE ~ NA_character_
+    ),
     PITScanned = case_when(
       PITscan == 'PIT tag present' ~ 'Yes',
       PITscan == 'No PIT tag' ~ 'No',
@@ -123,10 +135,10 @@ data_clean <- data %>%
     Scales = NA_character_,
     Otolith = NA_character_,
     Count = as.double(Count),
-    CarcassComments = Comments,
+    CarcassComments = CarcassComments,
     Latitude = NA_character_, # no lat/long for carcasses
     Longitude = NA_character_,
-    RadioTag = if_else(RadioTag == 1, 'Yes', 'No'),
+    RadioTag = if_else(RadioTagPresent == TRUE, 'Yes', 'No'),
     TransmitterType = NA_character_,
     Vendor = NA_character_,
     SerialNumber = NA_character_,
@@ -190,9 +202,9 @@ data_clean <- data %>%
     VIE_Age = NA_integer_,
     PIT_Age = ifelse(PITage>0,PITage, NA),
     Fin_Age = NA_integer_,
-    Scale_Age = ifelse(BestScaleAge>0,BestScaleAge, NA)
+    Scale_Age = ifelse(BestScaleAge>0,BestScaleAge, NA),
+    Best_Age = ifelse(BestAge > 0, BestAge, NA)
   ) %>%
-  # filter(MarkRecapSizeCategory %in% c('Adult','Adult NA')) %>%  # This probably won't live here forever.
   select(
     ESU_DPS,
     MPG,
@@ -281,7 +293,8 @@ data_clean <- data %>%
     VIE_Age,
     PIT_Age,
     Fin_Age,
-    Scale_Age)
+    Scale_Age,
+    Best_Age)
 
 return(data_clean)
 
