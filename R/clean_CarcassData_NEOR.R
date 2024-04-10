@@ -203,7 +203,8 @@ data_clean <- data %>%
     PIT_Age = ifelse(PITage>0,PITage, NA),
     Fin_Age = NA_integer_,
     Scale_Age = ifelse(BestScaleAge>0,BestScaleAge, NA),
-    Best_Age = ifelse(BestAge > 0, BestAge, NA)
+    Best_Age = ifelse(BestAge > 0, BestAge, NA),
+    Length_Age = ifelse(LengthAge > 0, LengthAge, NA)
   ) %>%
   select(
     ESU_DPS,
@@ -294,7 +295,8 @@ data_clean <- data %>%
     PIT_Age,
     Fin_Age,
     Scale_Age,
-    Best_Age)
+    Best_Age,
+    Length_Age)
 
 return(data_clean)
 
